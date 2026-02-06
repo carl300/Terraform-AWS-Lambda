@@ -1,0 +1,7 @@
+output "primary_instance_id" {
+  value = aws_instance.primary.id
+}
+
+output "lambda_function_name" {
+  value = aws_lambda_function.create_and_copy_ami.function_name
+}

@@ -1,0 +1,19 @@
+variable "primary_region" {
+  type    = string
+  default = "us-east-1"
+}
+
+variable "dr_region" {
+  type    = string
+  default = "us-west-2"
+}
+
+variable "instance_name" {
+  type    = string
+  default = "primary-dr-ubuntu"
+}
+
+variable "schedule_expression" {
+  type    = string
+  default = "rate(1 day)"
+}

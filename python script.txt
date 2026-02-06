@@ -1,0 +1,64 @@
+import boto3
+import os
+from datetime import datetime
+
+INSTANCE_ID = os.environ["INSTANCE_ID"]
+DR_REGION = os.environ["DR_REGION"]
+
+ec2 = boto3.client("ec2")
+ec2_dr = boto3.client("ec2", region_name=DR_REGION)
+
+def lambda_handler(event, context):
+    timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    ami_name = f"dr-ami-{INSTANCE_ID}-{timestamp}"
+
+    # 1. Create AMI in primary region
+    resp = ec2.create_image(
+        InstanceId=INSTANCE_ID,
+        Name=ami_name,
+        Description="DR AMI created by Lambda",
+        NoReboot=True
+    )
+    ami_id = resp["ImageId"]
+    print(f"Created AMI: {ami_id}")
+
+    # Tag AMI
+    ec2.create_tags(
+        Resources=[ami_id],
+        Tags=[
+            {"Key": "Name", "Value": ami_name},
+            {"Key": "DR", "Value": "primary"}
+        ]
+    )
+
+    # 2. Wait until AMI is available
+    waiter = ec2.get_waiter("image_available")
+    waiter.wait(ImageIds=[ami_id])
+    print(f"AMI {ami_id} is now available")
+
+    # 3. Copy AMI to DR region
+    copy_resp = ec2_dr.copy_image(
+        Name=ami_name,
+        SourceImageId=ami_id,
+        SourceRegion=ec2.meta.region_name,
+        Description="Copied for DR"
+    )
+    dr_ami_id = copy_resp["ImageId"]
+    print(f"Copied AMI to {DR_REGION}: {dr_ami_id}")
+
+    # Tag DR AMI
+    ec2_dr.create_tags(
+        Resources=[dr_ami_id],
+        Tags=[
+            {"Key": "Name", "Value": ami_name},
+            {"Key": "DR", "Value": "copy"}
+        ]
+    )
+
+    return {
+        "statusCode": 200,
+        "body": {
+            "primary_ami": ami_id,
+            "dr_ami": dr_ami_id
+        }
+    }
